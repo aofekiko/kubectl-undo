@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/aofekiko/kubectl-undo/pkg/logger"
 	request "github.com/aofekiko/kubectl-undo/pkg/plugin"
@@ -17,10 +18,21 @@ var GetCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(3),
 	Run: func(cmd *cobra.Command, args []string) {
 		log := logger.NewLogger()
-		ResourceType := args[0]
+		ResourceKind := args[0]
 		ResourceName := args[1]
 		ResourceVersion := args[2]
-		resource, err := request.GetStaleResource(KubernetesConfigFlags, ResourceType, ResourceName, ResourceVersion)
+		if i, err := strconv.Atoi(ResourceVersion); err == nil && i == 0 { //TODO: change the trigger for this feature to a negative number instead of 0
+			unstructured, err := request.GetCurrentResource(DiscoveryClient, DynamicClient, ResourceVersion, ResourceKind, ResourceName, *KubernetesConfigFlags.Namespace)
+			ResourceVersion = unstructured.GetResourceVersion()
+			ResourceVersionInt, err := strconv.Atoi(ResourceVersion)
+			if err != nil {
+				log.Info("Failed to parse object's resourceVersion")
+				//log.Info(fmt.Sprintf("Failed to parse object's resourceVersion: %v\n", err))
+			}
+			ResourceVersionInt--
+			ResourceVersion = strconv.Itoa(ResourceVersionInt)
+		}
+		resource, err := request.GetStaleResource(KubernetesConfigFlags, DiscoveryClient, ClientSet, ResourceKind, ResourceName, ResourceVersion)
 		if err != nil {
 			log.Error(err)
 		}

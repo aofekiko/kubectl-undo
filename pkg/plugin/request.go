@@ -1,6 +1,7 @@
 package request
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -11,10 +12,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 )
 
-func discoverGroupVersion(discoveryClient discovery.DiscoveryClient, ResourceKind string) (*metav1.APIResource, error) {
+func DiscoverGroupVersion(discoveryClient discovery.DiscoveryClient, ResourceKind string) (*metav1.APIResource, error) {
 	lowercaseKind := strings.ToLower(ResourceKind)
 	resources, err := discoveryClient.ServerPreferredResources()
 	if err != nil {
@@ -46,34 +48,25 @@ func buildAPIResource(resource metav1.APIResource, gv schema.GroupVersion) (*met
 	return &resource, nil
 }
 
-func GetStaleResource(configFlags *genericclioptions.ConfigFlags, ResourceKind string, ResourceName string, ResourceVersion string) (*unstructured.Unstructured, error) {
+func GetStaleResource(configFlags *genericclioptions.ConfigFlags, discoveryClient *discovery.DiscoveryClient, clientSet *kubernetes.Clientset, ResourceKind string, ResourceName string, ResourceVersion string) (*unstructured.Unstructured, error) {
+	//TODO: correct logging
+	//TODO: Error handling
+	//TODO: make a controller to have the clients present instead of as parameters
 	log := logger.NewLogger()
-	config, err := configFlags.ToRESTConfig()
-	if err != nil {
-		log.Info("failed to read kubeconfig")
-		//log.Info(fmt.Sprintf("failed to read kubeconfig: %w", err))
-		return nil, err
-	}
 
-	discoveryClient := discovery.NewDiscoveryClientForConfigOrDie(config)
+	//discoveryClient := discovery.NewDiscoveryClientForConfigOrDie(config)
 
-	apiVersion, err := discoverGroupVersion(*discoveryClient, ResourceKind)
+	apiVersion, err := DiscoverGroupVersion(*discoveryClient, ResourceKind)
 	if err != nil {
 		log.Info("Failed to list API Resources")
 		//log.Info(fmt.Sprintf("Failed to list API Resources: %v\n", err))
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Info("failed to create clientset")
-		//log.Info(fmt.Sprintf("Error creating dynamic client: %v\n", err))
-	}
-
 	objects := &unstructured.UnstructuredList{}
-	request := clientset.RESTClient().Get().Prefix(fmt.Sprintf("/api/%s/%s", apiVersion.Group, apiVersion.Version)).Resource(apiVersion.Name).NamespaceIfScoped(*configFlags.Namespace, apiVersion.Namespaced).Param("resourceVersion", ResourceVersion).Param("resourceVersionMatch", "Exact")
+	request := clientSet.RESTClient().Get().Prefix(fmt.Sprintf("/api/%s/%s", apiVersion.Group, apiVersion.Version)).Resource(apiVersion.Name).NamespaceIfScoped(*configFlags.Namespace, apiVersion.Namespaced).Param("resourceVersion", ResourceVersion).Param("resourceVersionMatch", "Exact")
 	URL := request.URL()
 	log.Info(URL.String())
-	err = request.Do().Into(objects)
+	err = request.Do(context.TODO()).Into(objects)
 	if err != nil {
 		log.Info("failed to get resource, the ResourceVersion may have been compacted")
 		//log.Info(fmt.Sprintf("failed to get resource: %v\n", err))
@@ -85,4 +78,25 @@ func GetStaleResource(configFlags *genericclioptions.ConfigFlags, ResourceKind s
 	}
 	log.Info("Did not find a resource with the matching name")
 	return nil, nil
+}
+
+func GetCurrentResource(discoveryClient *discovery.DiscoveryClient, dynamicClient *dynamic.DynamicClient, resourceVersion string, resourceKind string, resourceName string, namespace string) (*unstructured.Unstructured, error) {
+	log := logger.NewLogger()
+	resource, err := DiscoverGroupVersion(*discoveryClient, resourceKind)
+	if err != nil {
+		log.Info("Failed to list API Resources")
+		//log.Info(fmt.Sprintf("Failed to list API Resources: %v\n", err))
+		return nil, err
+	}
+	unstructured, err := dynamicClient.Resource(schema.GroupVersionResource{
+		Group:    resource.Group,
+		Version:  resource.Version,
+		Resource: resource.Name,
+	}).Namespace(namespace).Get(context.TODO(), resourceName, metav1.GetOptions{})
+	if err != nil {
+		log.Info("Failed to get resource")
+		//log.Info(fmt.Sprintf("Failed to get resource: %v\n", err))
+		return nil, err
+	}
+	return unstructured, nil
 }

@@ -14,11 +14,18 @@ import (
 	"github.com/spf13/viper"
 
 	//"github.com/tj/go-spin"
+	"github.com/aofekiko/kubectl-undo/pkg/logger"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 )
 
 var (
 	KubernetesConfigFlags *genericclioptions.ConfigFlags
+	ClientSet             *kubernetes.Clientset
+	DiscoveryClient       *discovery.DiscoveryClient
+	DynamicClient         *dynamic.DynamicClient
 )
 
 var (
@@ -48,10 +55,30 @@ func RootCmd() *cobra.Command {
 		GetCmd,
 	)
 
+	log := logger.NewLogger()
+
 	cobra.OnInitialize(initConfig)
 
 	KubernetesConfigFlags = genericclioptions.NewConfigFlags(true)
 	KubernetesConfigFlags.AddFlags(cmd.PersistentFlags())
+
+	config, err := KubernetesConfigFlags.ToRESTConfig()
+	if err != nil {
+		log.Info("failed to read kubeconfig")
+		//log.Info(fmt.Sprintf("failed to read kubeconfig: %w", err))
+	}
+	DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(config)
+
+	ClientSet, err = kubernetes.NewForConfig(config)
+	if err != nil {
+		log.Info("failed to create clientset")
+		//log.Info(fmt.Sprintf("Error creating dynamic client: %v\n", err))
+	}
+
+	DynamicClient, err = dynamic.NewForConfig(config)
+	if err != nil {
+		log.Info("failed to create dynamicclient")
+	}
 
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	return cmd
