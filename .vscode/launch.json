@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceRoot}/cmd/plugin/main.go",
+            "args": ["get", "configmap", "test-configmap", "1540"]
+        }
+    ]
+}
