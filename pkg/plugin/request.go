@@ -70,16 +70,20 @@ func BuildRequest(configFlags *genericclioptions.ConfigFlags, ResourceKind strin
 		//log.Info(fmt.Sprintf("Error creating dynamic client: %v\n", err))
 	}
 
-	object := &unstructured.Unstructured{}
-	err = clientset.RESTClient().Get().Prefix(fmt.Sprintf("/api/%s/%s", apiVersion.Group, apiVersion.Version)).Resource(apiVersion.Name).NamespaceIfScoped(*configFlags.Namespace, apiVersion.Namespaced).SetHeader("resourceVersion", ResourceVersion).SetHeader("resourceVersionMatch", "Exact").Do().Into(object)
+	objects := &unstructured.UnstructuredList{}
+	err = clientset.RESTClient().Get().Prefix(fmt.Sprintf("/api/%s/%s", apiVersion.Group, apiVersion.Version)).Resource(apiVersion.Name).NamespaceIfScoped(*configFlags.Namespace, apiVersion.Namespaced).Param("resourceVersion", ResourceVersion).Param("resourceVersionMatch", "Exact").Do().Into(objects)
 	if err != nil {
 		log.Info("failed to get resource")
 		//log.Info(fmt.Sprintf("failed to get resource: %v\n", err))
 	}
-	serializer := json.NewYAMLSerializer(json.DefaultMetaFactory, scheme.Scheme, scheme.Scheme)
-	err = serializer.Encode(object, os.Stdout)
-	if err != nil {
-		log.Info(fmt.Sprintf("failed to encode objects: %v\n", err))
+	for _, resource := range objects.Items {
+		if resource.GetName() == ResourceName {
+			serializer := json.NewYAMLSerializer(json.DefaultMetaFactory, scheme.Scheme, scheme.Scheme)
+			err = serializer.Encode(&resource, os.Stdout)
+			if err != nil {
+				log.Info(fmt.Sprintf("failed to encode objects: %v\n", err))
+			}
+		}
 	}
 
 	return nil, nil
