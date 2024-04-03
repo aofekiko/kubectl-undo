@@ -30,6 +30,6 @@ var GetCmd = &cobra.Command{
 			}
 			resource = res
 		}
-		printer.PrintUnstructured(OutputFlag, resource)
+		print(printer.PrintUnstructured(GetOutputFlag, resource))
 	},
 }

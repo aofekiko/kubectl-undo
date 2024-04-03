@@ -1,8 +1,9 @@
 package printer
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
-	"os"
 
 	"github.com/aofekiko/kubectl-undo/pkg/logger"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -14,7 +15,7 @@ var (
 	log = logger.NewLogger()
 )
 
-func PrintUnstructured(outputFormat string, resource *unstructured.Unstructured) {
+func PrintUnstructured(outputFormat string, resource *unstructured.Unstructured) (string, error) {
 	var serializer *json.Serializer
 	switch outputFormat {
 	case "yaml":
@@ -22,10 +23,13 @@ func PrintUnstructured(outputFormat string, resource *unstructured.Unstructured)
 	case "json":
 		serializer = json.NewSerializer(json.DefaultMetaFactory, scheme.Scheme, scheme.Scheme, true)
 	case "none":
-		return
+		return "", errors.New("output format of none cannot be printed")
 	}
-	err := serializer.Encode(resource, os.Stdout)
+
+	var buffer bytes.Buffer
+	err := serializer.Encode(resource, &buffer)
 	if err != nil {
 		log.Info(fmt.Sprintf("failed to encode objects: %v\n", err))
 	}
+	return buffer.String(), nil
 }

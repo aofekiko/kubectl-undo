@@ -57,8 +57,8 @@ var ApplyCmd = &cobra.Command{
 		if err != nil {
 			log.Info("failed to apply resource")
 		}
-		if OutputFlag != "none" {
-			printer.PrintUnstructured(OutputFlag, newResource)
+		if ApplyOutputFlag != "none" {
+			print(printer.PrintUnstructured(ApplyOutputFlag, newResource))
 		}
 	},
 }
