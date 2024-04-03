@@ -21,7 +21,20 @@ var (
 	log = logger.NewLogger()
 )
 
-func DiscoverGroupVersion(discoveryClient discovery.DiscoveryClient, ResourceKind string) (*metav1.APIResource, error) {
+func KindToGVR(discoveryClient discovery.DiscoveryClient, ResourceKind string) (*schema.GroupVersionResource, error) {
+	apiResource, err := KindToAPIResource(discoveryClient, ResourceKind)
+	if err != nil {
+		log.Info("Failed to find the api resource by kind")
+	}
+
+	return &schema.GroupVersionResource{
+		Group:    apiResource.Group,
+		Version:  apiResource.Version,
+		Resource: apiResource.Name,
+	}, nil
+}
+
+func KindToAPIResource(discoveryClient discovery.DiscoveryClient, ResourceKind string) (*metav1.APIResource, error) {
 	lowercaseKind := strings.ToLower(ResourceKind)
 	resources, err := discoveryClient.ServerPreferredResources()
 	if err != nil {
@@ -60,7 +73,7 @@ func GetStaleResource(configFlags *genericclioptions.ConfigFlags, discoveryClien
 
 	//discoveryClient := discovery.NewDiscoveryClientForConfigOrDie(config)
 
-	apiVersion, err := DiscoverGroupVersion(*discoveryClient, ResourceKind)
+	apiVersion, err := KindToAPIResource(*discoveryClient, ResourceKind)
 	if err != nil {
 		log.Info("Failed to list API Resources")
 		//log.Info(fmt.Sprintf("Failed to list API Resources: %v\n", err))
@@ -85,7 +98,7 @@ func GetStaleResource(configFlags *genericclioptions.ConfigFlags, discoveryClien
 }
 
 func GetCurrentResource(discoveryClient *discovery.DiscoveryClient, dynamicClient *dynamic.DynamicClient, resourceKind string, resourceName string, namespace string) (*unstructured.Unstructured, error) {
-	resource, err := DiscoverGroupVersion(*discoveryClient, resourceKind)
+	resource, err := KindToAPIResource(*discoveryClient, resourceKind)
 	if err != nil {
 		log.Info("Failed to list API Resources")
 		//log.Info(fmt.Sprintf("Failed to list API Resources: %v\n", err))

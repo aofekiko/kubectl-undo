@@ -27,14 +27,15 @@ var (
 	DiscoveryClient       *discovery.DiscoveryClient
 	DynamicClient         *dynamic.DynamicClient
 	OutputFlag            string
+	ForceFlag             bool
+	log                   = logger.NewLogger()
+	fieldManager          = "kubectl-undo"
 )
 
 var (
 	undoShort = `Undo recent resource changes`
 	undoLong  = `
 	Undo resource changes and revert them to a previous version.
-
-	the "-o yaml" flag is implied
 	
 	As long as etcd has not been compacted (https://etcd.io/docs/latest/op-guide/maintenance/#auto-compaction)`
 	undoExample = `
@@ -64,7 +65,11 @@ func RootCmd() *cobra.Command {
 
 	KubernetesConfigFlags = genericclioptions.NewConfigFlags(true)
 	KubernetesConfigFlags.AddFlags(cmd.PersistentFlags())
-	cmd.PersistentFlags().StringVarP(&OutputFlag, "output", "o", "yaml", "Output format. One of: (json, yaml)")
+
+	GetCmd.Flags().StringVarP(&OutputFlag, "output", "o", "yaml", "Output format. One of: (json, yaml)")
+
+	ApplyCmd.Flags().StringVarP(&OutputFlag, "output", "o", "none", "Output format. One of: (none, json, yaml)")
+	ApplyCmd.Flags().BoolVarP(&ForceFlag, "force", "f", false, "Force apply. Will be needed most times")
 
 	config, err := KubernetesConfigFlags.ToRESTConfig()
 	if err != nil {
