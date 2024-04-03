@@ -3,6 +3,7 @@ package request
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/aofekiko/kubectl-undo/pkg/logger"
@@ -14,6 +15,10 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+)
+
+var (
+	log = logger.NewLogger()
 )
 
 func DiscoverGroupVersion(discoveryClient discovery.DiscoveryClient, ResourceKind string) (*metav1.APIResource, error) {
@@ -52,7 +57,6 @@ func GetStaleResource(configFlags *genericclioptions.ConfigFlags, discoveryClien
 	//TODO: correct logging
 	//TODO: Error handling
 	//TODO: make a controller to have the clients present instead of as parameters
-	log := logger.NewLogger()
 
 	//discoveryClient := discovery.NewDiscoveryClientForConfigOrDie(config)
 
@@ -80,8 +84,7 @@ func GetStaleResource(configFlags *genericclioptions.ConfigFlags, discoveryClien
 	return nil, nil
 }
 
-func GetCurrentResource(discoveryClient *discovery.DiscoveryClient, dynamicClient *dynamic.DynamicClient, resourceVersion string, resourceKind string, resourceName string, namespace string) (*unstructured.Unstructured, error) {
-	log := logger.NewLogger()
+func GetCurrentResource(discoveryClient *discovery.DiscoveryClient, dynamicClient *dynamic.DynamicClient, resourceKind string, resourceName string, namespace string) (*unstructured.Unstructured, error) {
 	resource, err := DiscoverGroupVersion(*discoveryClient, resourceKind)
 	if err != nil {
 		log.Info("Failed to list API Resources")
@@ -99,4 +102,24 @@ func GetCurrentResource(discoveryClient *discovery.DiscoveryClient, dynamicClien
 		return nil, err
 	}
 	return unstructured, nil
+}
+
+func GetMostRecentStaleResource(configFlags *genericclioptions.ConfigFlags, dynamicClient *dynamic.DynamicClient, discoveryClient *discovery.DiscoveryClient, clientSet *kubernetes.Clientset, ResourceKind string, ResourceName string, ResourceVersion string) (*unstructured.Unstructured, error) {
+	unstructured, err := GetCurrentResource(discoveryClient, dynamicClient, ResourceKind, ResourceName, *configFlags.Namespace)
+	if err != nil {
+		log.Info("Failed to get object")
+		//log.Info(fmt.Sprintf("Failed to get object: %v\n", err))
+		return nil, err
+	}
+	ResourceVersion = unstructured.GetResourceVersion()
+	ResourceVersionInt, err := strconv.Atoi(ResourceVersion)
+	if err != nil {
+		log.Info("Failed to parse object's resourceVersion")
+		//log.Info(fmt.Sprintf("Failed to parse object's resourceVersion: %v\n", err))
+		return nil, err
+	}
+	ResourceVersionInt--
+	ResourceVersion = strconv.Itoa(ResourceVersionInt)
+	resource, err := GetStaleResource(configFlags, discoveryClient, clientSet, ResourceKind, ResourceName, ResourceVersion)
+	return resource, err
 }
